@@ -1,0 +1,134 @@
+---
+title: "StormDataAnalysis"
+author: "Ashima Jain"
+date: "Sunday, April 03, 2016"
+output: html_document
+---
+
+#Reproducible Research Peer Assessment 2
+
+##Impact of weather events on human population and economy in the US
+
+###Introduction
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+###Synopsis
+In this project, we have tried to find how the different weather events have repercussive effects both on human population as well as at the economic front. With this report, one can conclude that tornadoes are majorly responsible for the maximum number of fatalities and injuries. Flooding and high surf cause most of the damage to the crops while tornadoes again in case of damage to property. The report further contains plots showing the top 11 events causing damage to life, property and crop.
+
+###Data Processing
+The data for this assignment come in the form of a comma-separated-value file compressed via the bzip2 algorithm to reduce its size.
+
+```{r}
+filename <- "repdata-data-StormData.csv.bz2" 
+if (!file.exists("repdata-data-StormData.csv")) { 
+  bzip2(filename) 
+}
+
+# Load dataset
+data <- read.csv('repdata-data-StormData.csv')
+head(data)
+summary(data)
+names(data) <- tolower(names(data))
+length(levels(data$evtype))
+evtype <- tolower(levels(data$evtype))
+
+# Processing of event types
+data$damagesource <- NA
+data[grepl("precipitation|rain|hail|drizzle|wet|percip|burst|depression|fog|wall cloud", data$evtype, ignore.case = TRUE), "damageSource"] <- "Precipitation & Fog"
+data[grepl("wind|storm|wnd|hurricane|typhoon", data$evtype, ignore.case = TRUE), "damagesource"] <- "Wind & Storm"
+data[grepl("slide|erosion|slump", data$evtype, ignore.case = TRUE), "damagesource"] <- "Landslide & Erosion"
+data[grepl("warmth|warm|heat|dry|hot|drought|thermia|temperature record|record temperature|record high", data$evtype, ignore.case = TRUE), "damageSource"] <- "Heat & Drought" 
+data[grepl("cold|cool|ice|icy|frost|freeze|snow|winter|wintry|wintery|blizzard|chill|freezing|avalanche|glaze|sleet", data$evtype, ignore.case = TRUE), "damageSource"] <- "Snow & Ice"
+data[grepl("flood|surf|blow-out|swells|fld|dam break", data$evtype, ignore.case = TRUE), "damagesource"] <- "Flooding & High Surf"
+data[grepl("seas|high water|tide|tsunami|wave|current|marine|drowning", data$evtype, ignore.case = TRUE), "damagesource"] <- "High seas"
+data[grepl("dust|saharan", data$evtype, ignore.case = TRUE), "damagesource"] <- "Dust & Saharan winds"  
+data[grepl("tstm|thunderstorm|lightning", data$evtype, ignore.case = TRUE), "damagesource"] <- "Thunderstorm & Lightning"
+data[grepl("tornado|spout|funnel|whirlwind", data$evtype, ignore.case = TRUE), "damagesource"] <- "Tornado"
+data[grepl("fire|smoke|volcanic", data$evtype, ignore.case = TRUE), "damagesource"] <- "Fire & Volcanic activity"
+data <- data[complete.cases(data[, "damagesource"]), ]
+data$damagesource <- as.factor(data$damagesource)
+
+toPowerTen <- function(n){
+  if(n %in% c('h','H'))
+    return(2)
+  else if(n %in% c('k','K'))
+    return(3)
+  else if(n %in% c('m', 'M'))
+    return(6)
+  else if(n %in% c('b','B'))
+    return(9)
+  else if(n %in% c('','-','?','+'))
+    return(0)
+  else if(is.numeric(n))
+    return(n)
+}
+
+computeValue <- function(n, exp){
+  if(is.numeric(n))
+     n <- as.numeric(n * 10^(toPowerTen(exp)))
+  else
+     n <-0
+  n
+}               
+
+# Finding a numeric value of the economic damages caused
+data$propdamage <- mapply(computeValue, data$propdmg, data$propdmgexp)
+data$cropdamage <- mapply(computeValue, data$cropdmg, data$cropdmgexp)
+storage.mode(data$propdamage) <- "integer"
+storage.mode(data$cropdamage) <- "integer"
+data <- data[complete.cases(data[, "propdamage"]), ]
+data <- data[complete.cases(data[, "cropdamage"]), ]
+```
+
+###Impact on Public Health
+The impact on human population is measured by the number of fatalities and injuries occurred.
+```{r}
+library(plyr)
+humandamage<- ddply(data, .(damagesource), summarize, fatalities = sum(fatalities), injuries = sum(injuries))
+fatal <- head(humandamage[order(humandamage$fatalities, decreasing = T), ], 10)
+rownames(fatal)<-NULL
+injure <- head(humandamage[order(humandamage$injuries, decreasing = T), ], 10)
+rownames(injure)<-NULL
+
+```
+
+###Impact on crops and property
+The impact of the weather events on the economy of the country is measured by the damage caused on property and crops.
+```{r}
+econdamage <- ddply(data, .(damagesource), summarize, propdamage = sum(as.numeric(propdamage)), cropdamage = sum(as.numeric(cropdamage)))
+property <- econdamage[order(econdamage$propdamage, decreasing = T), ]
+rownames(property)<-NULL
+crop <- econdamage[order(econdamage$cropdamage, decreasing = T), ]
+rownames(crop) <- NULL
+```
+
+###Results
+The weather events which lead to a large number of fatalities and injuries are stored in fatal and injure respectively.
+```{r}
+fatal
+injure
+
+par(mfrow=c(1,2),cex=0.7, mar = c(12, 4, 3, 2))
+barplot(fatal$fatalities, names.arg=fatal$damagesource,las=3, col="blue", main="Event Types with top Fatalities")
+barplot(injure$injuries, names.arg=injure$damagesource,las=3, col="blue", main="Event Types with top Injuries")
+
+```
+
+The above plot summarises the effect of the weather events on public health with tornado being on the top.
+
+
+
+The weather events which lead to major damage to crop and property are stored in crop and property respectively.
+```{r}
+crop
+property
+
+par(mfrow=c(1,2),cex=0.7, mar = c(12, 4, 3, 2))
+barplot(property$propdamage, names.arg=property$damagesource,las=3, col="blue", main="Event Types with top Property damage")
+barplot(crop$cropdamage, names.arg=crop$damagesource,las=3, col="blue", main="Event Types with top Crop damage")
+```
+
+The above plot summarises the effect of the weather events on the economy.Tornado causes most damage to property while flooding and high surf to crop.
+
